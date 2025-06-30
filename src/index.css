@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-sans antialiased;
+  }
+}
+
+@layer components {
+  .ongc-gradient {
+    @apply bg-gradient-to-br from-red-700 via-red-600 to-red-800;
+  }
+  
+  .ongc-gold-gradient {
+    @apply bg-gradient-to-br from-yellow-500 via-yellow-600 to-amber-600;
+  }
+  
+  .chat-bubble-user {
+    @apply bg-gradient-to-br from-red-600 to-red-700 text-white rounded-lg px-4 py-2 max-w-xs ml-auto;
+  }
+  
+  .chat-bubble-assistant {
+    @apply bg-white border border-gray-200 text-gray-800 rounded-lg px-4 py-2 max-w-xs mr-auto shadow-sm;
+  }
+  
+  .sidebar-item {
+    @apply flex items-center space-x-3 px-4 py-3 text-gray-700 hover:bg-gray-100 hover:text-red-700 transition-colors duration-200 cursor-pointer rounded-lg mx-2;
+  }
+  
+  .sidebar-item.active {
+    @apply bg-red-50 text-red-700 border-r-2 border-red-600;
+  }
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
