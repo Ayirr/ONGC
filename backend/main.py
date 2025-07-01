@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, status
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, status, BackgroundTasks
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 import aiofiles
 import uuid
 from dotenv import load_dotenv
+import logging
 
 # Load environment variables
 load_dotenv()
@@ -25,13 +26,19 @@ from auth import (
     create_access_token, verify_password, get_password_hash,
     decode_access_token, get_current_user, get_current_admin_user
 )
+from deepseek_client import get_deepseek_client, cleanup_deepseek_client
+from rag_service import get_rag_service
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Create tables
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="ONGC RAG Assistant API",
-    description="Backend API for ONGC's internal RAG-based LLM assistant",
+    description="Backend API for ONGC's internal RAG-based LLM assistant with DeepSeek integration",
     version="1.0.0"
 )
 
@@ -49,6 +56,22 @@ security = HTTPBearer()
 # Create upload directory
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+# Startup and shutdown events
+@app.on_event("startup")
+async def startup_event():
+    logger.info("Starting ONGC RAG Assistant API with DeepSeek integration")
+    try:
+        # Test DeepSeek connection
+        deepseek_client = get_deepseek_client()
+        logger.info("DeepSeek client initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize DeepSeek client: {str(e)}")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    logger.info("Shutting down ONGC RAG Assistant API")
+    await cleanup_deepseek_client()
 
 # Authentication endpoints
 @app.post("/api/auth/signup", response_model=dict)
@@ -118,56 +141,101 @@ async def login(user_data: UserLogin, db: Session = Depends(get_db)):
         }
     }
 
-# Chat endpoints
+# Enhanced chat endpoint with DeepSeek and RAG
 @app.post("/api/chat", response_model=dict)
 async def send_message(
     message_data: MessageCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    # Create or get chat
-    chat_id = message_data.chatId
-    if not chat_id:
-        # Create new chat
-        chat = Chat(
-            title=message_data.message[:50] + "..." if len(message_data.message) > 50 else message_data.message,
-            user_id=current_user.id
+    try:
+        # Create or get chat
+        chat_id = message_data.chatId
+        if not chat_id:
+            # Create new chat
+            chat = Chat(
+                title=message_data.message[:50] + "..." if len(message_data.message) > 50 else message_data.message,
+                user_id=current_user.id
+            )
+            db.add(chat)
+            db.commit()
+            db.refresh(chat)
+            chat_id = chat.id
+        else:
+            chat = db.query(Chat).filter(Chat.id == chat_id, Chat.user_id == current_user.id).first()
+            if not chat:
+                raise HTTPException(status_code=404, detail="Chat not found")
+        
+        # Save user message
+        user_message = Message(
+            chat_id=chat_id,
+            content=message_data.message,
+            sender="user"
         )
-        db.add(chat)
+        db.add(user_message)
         db.commit()
-        db.refresh(chat)
-        chat_id = chat.id
-    else:
-        chat = db.query(Chat).filter(Chat.id == chat_id, Chat.user_id == current_user.id).first()
-        if not chat:
-            raise HTTPException(status_code=404, detail="Chat not found")
-    
-    # Save user message
-    user_message = Message(
-        chat_id=chat_id,
-        content=message_data.message,
-        sender="user"
-    )
-    db.add(user_message)
-    
-    # Generate AI response (mock for now)
-    ai_response = generate_ai_response(message_data.message)
-    
-    # Save AI message
-    ai_message = Message(
-        chat_id=chat_id,
-        content=ai_response["message"],
-        sender="assistant"
-    )
-    db.add(ai_message)
-    
-    db.commit()
-    
-    return {
-        "chatId": chat_id,
-        "message": ai_response["message"],
-        "sources": ai_response.get("sources", [])
-    }
+        
+        # Get RAG service and retrieve relevant context
+        rag_service = get_rag_service()
+        context, source_documents = await rag_service.retrieve_relevant_context(
+            message_data.message, 
+            current_user.id, 
+            db
+        )
+        
+        # Get DeepSeek client and generate response
+        deepseek_client = get_deepseek_client()
+        
+        # Generate AI response using DeepSeek with RAG context
+        ai_response_text = await deepseek_client.generate_response(
+            user_message=message_data.message,
+            context=context
+        )
+        
+        # Save AI message
+        ai_message = Message(
+            chat_id=chat_id,
+            content=ai_response_text,
+            sender="assistant"
+        )
+        db.add(ai_message)
+        db.commit()
+        
+        logger.info(f"Generated response for user {current_user.username} using DeepSeek with {len(source_documents)} source documents")
+        
+        return {
+            "chatId": chat_id,
+            "message": ai_response_text,
+            "sources": source_documents,
+            "timestamp": ai_message.created_at.isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in chat endpoint: {str(e)}")
+        # Rollback any database changes
+        db.rollback()
+        
+        # Return a fallback response
+        fallback_response = "I apologize, but I'm experiencing technical difficulties. Please try again in a moment."
+        
+        # Try to save the fallback response
+        try:
+            ai_message = Message(
+                chat_id=chat_id if 'chat_id' in locals() else None,
+                content=fallback_response,
+                sender="assistant"
+            )
+            if 'chat_id' in locals() and chat_id:
+                db.add(ai_message)
+                db.commit()
+        except:
+            pass
+        
+        return {
+            "chatId": chat_id if 'chat_id' in locals() else None,
+            "message": fallback_response,
+            "sources": []
+        }
 
 @app.get("/api/my-chats", response_model=List[ChatResponse])
 async def get_my_chats(
@@ -219,9 +287,10 @@ async def get_chat_history(
         updatedAt=chat.updated_at.isoformat()
     )
 
-# Document endpoints
+# Enhanced document upload with background processing
 @app.post("/api/upload", response_model=DocumentResponse)
 async def upload_document(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -253,12 +322,15 @@ async def upload_document(
         filePath=file_path,
         uploadedBy=current_user.username,
         user_id=current_user.id,
-        status="completed"
+        status="processing"
     )
     
     db.add(document)
     db.commit()
     db.refresh(document)
+    
+    # Add background task to process the document
+    background_tasks.add_task(process_document_background, document.id)
     
     return DocumentResponse(
         id=document.id,
@@ -269,6 +341,30 @@ async def upload_document(
         uploadedAt=document.uploaded_at.isoformat(),
         status=document.status
     )
+
+async def process_document_background(document_id: int):
+    """Background task to process uploaded documents"""
+    try:
+        from database import SessionLocal
+        db = SessionLocal()
+        
+        document = db.query(Document).filter(Document.id == document_id).first()
+        if not document:
+            logger.error(f"Document {document_id} not found for processing")
+            return
+        
+        rag_service = get_rag_service()
+        success = await rag_service.process_document(document, db)
+        
+        if success:
+            logger.info(f"Successfully processed document: {document.fileName}")
+        else:
+            logger.error(f"Failed to process document: {document.fileName}")
+        
+        db.close()
+        
+    except Exception as e:
+        logger.error(f"Error in background document processing: {str(e)}")
 
 @app.get("/api/my-docs", response_model=List[DocumentResponse])
 async def get_my_documents(
@@ -518,40 +614,29 @@ async def get_system_stats(
         recentActivity=recent_activity
     )
 
-# Helper function to generate AI response (mock)
-def generate_ai_response(message: str) -> dict:
-    """
-    Mock AI response generator. In production, this would integrate with your RAG system.
-    """
-    responses = [
-        "Based on ONGC's operational guidelines, I can help you with that query.",
-        "According to the safety protocols in your uploaded documents, here's what I found:",
-        "From the technical specifications available, I can provide the following information:",
-        "Based on the regulatory compliance documents, here are the key points:",
-    ]
-    
-    import random
-    response = random.choice(responses) + f" Your query about '{message}' requires detailed analysis of the relevant documentation."
-    
-    # Mock sources
-    sources = [
-        {
-            "title": "ONGC Safety Manual 2024",
-            "snippet": "Safety protocols and emergency procedures for offshore operations...",
-            "fileName": "safety_manual_2024.pdf",
-            "fileUrl": "/docs/safety_manual_2024.pdf"
-        }
-    ] if "safety" in message.lower() else []
-    
-    return {
-        "message": response,
-        "sources": sources
-    }
-
 # Health check endpoint
 @app.get("/api/health")
 async def health_check():
-    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+    try:
+        # Test DeepSeek connection
+        deepseek_client = get_deepseek_client()
+        health_status = {
+            "status": "healthy",
+            "timestamp": datetime.utcnow().isoformat(),
+            "services": {
+                "database": "operational",
+                "deepseek": "operational",
+                "rag": "operational"
+            }
+        }
+        return health_status
+    except Exception as e:
+        logger.error(f"Health check failed: {str(e)}")
+        return {
+            "status": "unhealthy",
+            "timestamp": datetime.utcnow().isoformat(),
+            "error": str(e)
+        }
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
