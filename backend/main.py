@@ -26,7 +26,7 @@ from auth import (
     create_access_token, verify_password, get_password_hash,
     decode_access_token, get_current_user, get_current_admin_user
 )
-from deepseek_client import get_deepseek_client, cleanup_deepseek_client
+from groq_client import get_groq_client, cleanup_groq_client
 from rag_service import get_rag_service
 
 # Configure logging
@@ -38,7 +38,7 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="ONGC RAG Assistant API",
-    description="Backend API for ONGC's internal RAG-based LLM assistant with DeepSeek integration",
+    description="Backend API for ONGC's internal RAG-based LLM assistant with Groq integration",
     version="1.0.0"
 )
 
@@ -60,18 +60,18 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 # Startup and shutdown events
 @app.on_event("startup")
 async def startup_event():
-    logger.info("Starting ONGC RAG Assistant API with DeepSeek integration")
+    logger.info("Starting ONGC RAG Assistant API with Groq integration")
     try:
-        # Test DeepSeek connection
-        deepseek_client = get_deepseek_client()
-        logger.info("DeepSeek client initialized successfully")
+        # Test Groq connection
+        groq_client = get_groq_client()
+        logger.info("Groq client initialized successfully")
     except Exception as e:
-        logger.error(f"Failed to initialize DeepSeek client: {str(e)}")
+        logger.error(f"Failed to initialize Groq client: {str(e)}")
 
 @app.on_event("shutdown")
 async def shutdown_event():
     logger.info("Shutting down ONGC RAG Assistant API")
-    await cleanup_deepseek_client()
+    await cleanup_groq_client()
 
 # Authentication endpoints
 @app.post("/api/auth/signup", response_model=dict)
@@ -141,7 +141,7 @@ async def login(user_data: UserLogin, db: Session = Depends(get_db)):
         }
     }
 
-# Enhanced chat endpoint with DeepSeek and RAG
+# Enhanced chat endpoint with Groq and RAG
 @app.post("/api/chat", response_model=dict)
 async def send_message(
     message_data: MessageCreate,
@@ -183,11 +183,11 @@ async def send_message(
             db
         )
         
-        # Get DeepSeek client and generate response
-        deepseek_client = get_deepseek_client()
+        # Get Groq client and generate response
+        groq_client = get_groq_client()
         
-        # Generate AI response using DeepSeek with RAG context
-        ai_response_text = await deepseek_client.generate_response(
+        # Generate AI response using Groq with RAG context
+        ai_response_text = await groq_client.generate_response(
             user_message=message_data.message,
             context=context
         )
@@ -201,7 +201,7 @@ async def send_message(
         db.add(ai_message)
         db.commit()
         
-        logger.info(f"Generated response for user {current_user.username} using DeepSeek with {len(source_documents)} source documents")
+        logger.info(f"Generated response for user {current_user.username} using Groq with {len(source_documents)} source documents")
         
         return {
             "chatId": chat_id,
@@ -618,14 +618,14 @@ async def get_system_stats(
 @app.get("/api/health")
 async def health_check():
     try:
-        # Test DeepSeek connection
-        deepseek_client = get_deepseek_client()
+        # Test Groq connection
+        groq_client = get_groq_client()
         health_status = {
             "status": "healthy",
             "timestamp": datetime.utcnow().isoformat(),
             "services": {
                 "database": "operational",
-                "deepseek": "operational",
+                "groq": "operational",
                 "rag": "operational"
             }
         }

@@ -1,25 +1,26 @@
-# ONGC RAG Assistant Backend with DeepSeek Integration
+# ONGC RAG Assistant Backend with Groq Integration
 
-FastAPI backend for ONGC's internal RAG-based LLM assistant, now powered by DeepSeek AI.
+FastAPI backend for ONGC's internal RAG-based LLM assistant, now powered by Groq AI for ultra-fast inference.
 
 ## Features
 
 - **Authentication**: JWT-based authentication with role-based access control
 - **Document Management**: Upload, store, and manage documents (PDF, DOCX, TXT)
 - **RAG Integration**: Retrieval-Augmented Generation using uploaded documents
-- **DeepSeek AI**: Powered by DeepSeek's advanced language model
+- **Groq AI**: Powered by Groq's lightning-fast language model inference
 - **Chat Interface**: RESTful API for chat interactions with context-aware responses
 - **Admin Panel**: Administrative endpoints for user and document management
 - **Database**: SQLite database with SQLAlchemy ORM
 
-## New DeepSeek Integration
+## New Groq Integration
 
-This version replaces the mock AI responses with actual DeepSeek API integration:
+This version uses Groq's API for extremely fast AI responses:
 
-- **Real AI Responses**: Uses DeepSeek's language model for intelligent responses
+- **Ultra-Fast Responses**: Groq's custom LPU (Language Processing Unit) provides industry-leading inference speeds
+- **Free Tier Available**: Groq offers generous free usage limits for developers
 - **Context-Aware**: Integrates with RAG system to provide document-based answers
 - **ONGC-Specific**: Customized system prompts for ONGC operations and safety
-- **Scalable**: Async HTTP client for efficient API calls
+- **Multiple Models**: Support for Llama 3, Mixtral, and other open-source models
 
 ## Setup
 
@@ -40,13 +41,13 @@ cp .env.example .env
 
 Edit `.env` with your configuration:
 
-**Required DeepSeek Configuration:**
+**Required Groq Configuration:**
 ```env
-DEEPSEEK_API_KEY=your-deepseek-api-key-here
-DEEPSEEK_BASE_URL=https://api.deepseek.com
-DEEPSEEK_MODEL=deepseek-chat
-DEEPSEEK_MAX_TOKENS=4000
-DEEPSEEK_TEMPERATURE=0.7
+GROQ_API_KEY=your-groq-api-key-here
+GROQ_BASE_URL=https://api.groq.com/openai
+GROQ_MODEL=llama3-8b-8192
+GROQ_MAX_TOKENS=4000
+GROQ_TEMPERATURE=0.7
 ```
 
 **Other Configuration:**
@@ -54,23 +55,29 @@ DEEPSEEK_TEMPERATURE=0.7
 - Adjust database URL if needed
 - Configure RAG settings as required
 
-### 3. Get DeepSeek API Key
+### 3. Get Groq API Key (FREE!)
 
-1. Visit [DeepSeek's website](https://www.deepseek.com/) and create an account
-2. Navigate to the API section and generate an API key
-3. Add the API key to your `.env` file
+1. Visit [Groq Console](https://console.groq.com/) and create an account
+2. Navigate to the API Keys section
+3. Generate a new API key
+4. Add the API key to your `.env` file
 
-### 4. Test DeepSeek Integration
+**Note**: Groq offers a generous free tier with:
+- 14,400 requests per day
+- 6,000 requests per minute
+- No credit card required for signup
+
+### 4. Test Groq Integration
 
 Run the setup script to test your configuration:
 
 ```bash
-python setup_deepseek.py
+python setup_groq.py
 ```
 
 This will:
 - Check your environment configuration
-- Test the DeepSeek API connection
+- Test the Groq API connection
 - Verify the integration is working
 
 ### 5. Initialize Database
@@ -108,13 +115,27 @@ Once the server is running, you can access:
 - **Interactive API docs**: http://localhost:8000/docs
 - **ReDoc documentation**: http://localhost:8000/redoc
 
-## DeepSeek Integration Details
+## Groq Integration Details
+
+### Why Groq?
+
+1. **Speed**: Up to 10x faster inference than traditional cloud providers
+2. **Cost**: Generous free tier, cost-effective paid plans
+3. **Quality**: Access to state-of-the-art open-source models
+4. **Reliability**: High availability and consistent performance
+
+### Available Models
+
+- **llama3-8b-8192**: Fast, efficient model for most tasks
+- **llama3-70b-8192**: More capable model for complex reasoning
+- **mixtral-8x7b-32768**: Excellent for multilingual and code tasks
+- **gemma-7b-it**: Google's Gemma model optimized for instruction following
 
 ### Architecture
 
-1. **DeepSeek Client** (`deepseek_client.py`):
-   - Async HTTP client for DeepSeek API
-   - Message formatting and response handling
+1. **Groq Client** (`groq_client.py`):
+   - Async HTTP client for Groq API
+   - OpenAI-compatible API format
    - Error handling and retry logic
 
 2. **RAG Service** (`rag_service.py`):
@@ -124,29 +145,29 @@ Once the server is running, you can access:
 
 3. **Enhanced Chat Endpoint**:
    - Retrieves relevant context from user's documents
-   - Sends context + user query to DeepSeek
+   - Sends context + user query to Groq
    - Returns AI response with source citations
 
 ### API Flow
 
 1. User sends a message via `/api/chat`
 2. System retrieves relevant context from user's uploaded documents
-3. Context + user message sent to DeepSeek API
-4. DeepSeek generates contextually-aware response
+3. Context + user message sent to Groq API
+4. Groq generates contextually-aware response (typically in <1 second)
 5. Response returned to user with source document citations
 
 ### Configuration Options
 
 ```env
-# DeepSeek Model Configuration
-DEEPSEEK_MODEL=deepseek-chat          # Model to use
-DEEPSEEK_MAX_TOKENS=4000              # Maximum response length
-DEEPSEEK_TEMPERATURE=0.7              # Response creativity (0.0-1.0)
+# Groq Model Configuration
+GROQ_MODEL=llama3-8b-8192          # Model to use
+GROQ_MAX_TOKENS=4000               # Maximum response length
+GROQ_TEMPERATURE=0.7               # Response creativity (0.0-1.0)
 
 # RAG Configuration
-CHUNK_SIZE=1000                       # Document chunk size
-CHUNK_OVERLAP=200                     # Overlap between chunks
-MAX_CONTEXT_LENGTH=8000               # Maximum context sent to AI
+CHUNK_SIZE=1000                    # Document chunk size
+CHUNK_OVERLAP=200                  # Overlap between chunks
+MAX_CONTEXT_LENGTH=8000            # Maximum context sent to AI
 ```
 
 ## Enhanced Features
@@ -167,16 +188,16 @@ MAX_CONTEXT_LENGTH=8000               # Maximum context sent to AI
 
 ### Error Handling
 
-- **Graceful Degradation**: Fallback responses when DeepSeek is unavailable
+- **Graceful Degradation**: Fallback responses when Groq is unavailable
 - **Retry Logic**: Automatic retry for transient failures
 - **Logging**: Comprehensive logging for debugging
-- **Health Checks**: API health monitoring including DeepSeek status
+- **Health Checks**: API health monitoring including Groq status
 
 ## Production Considerations
 
 ### Security
 
-1. **API Key Management**: Store DeepSeek API key securely
+1. **API Key Management**: Store Groq API key securely
 2. **Rate Limiting**: Implement rate limiting for API calls
 3. **Input Validation**: Validate all user inputs
 4. **HTTPS**: Use HTTPS in production
@@ -190,8 +211,8 @@ MAX_CONTEXT_LENGTH=8000               # Maximum context sent to AI
 
 ### Monitoring
 
-1. **API Usage**: Monitor DeepSeek API usage and costs
-2. **Response Times**: Track AI response latencies
+1. **API Usage**: Monitor Groq API usage and rate limits
+2. **Response Times**: Track AI response latencies (typically <1s)
 3. **Error Rates**: Monitor API failure rates
 4. **Resource Usage**: Monitor server resources
 
@@ -212,25 +233,40 @@ For production use, consider upgrading to:
 4. **Reranking**: Implement reranking for better context selection
 5. **Hybrid Search**: Combine keyword and semantic search
 
+## Groq Rate Limits
+
+### Free Tier Limits
+- **Requests per day**: 14,400
+- **Requests per minute**: 6,000
+- **Tokens per minute**: 30,000
+
+### Best Practices
+1. Implement request queuing for high-traffic scenarios
+2. Cache responses for repeated queries
+3. Use appropriate model for task complexity
+4. Monitor usage via Groq console
+
 ## Troubleshooting
 
 ### Common Issues
 
-1. **DeepSeek API Key Invalid**:
+1. **Groq API Key Invalid**:
    - Verify your API key is correct
-   - Check if your account has sufficient credits
+   - Check if you've exceeded rate limits
 
 2. **Connection Errors**:
    - Verify internet connectivity
-   - Check if DeepSeek API is accessible from your network
+   - Check if Groq API is accessible from your network
 
-3. **Document Processing Fails**:
-   - Check file permissions in upload directory
-   - Verify file types are supported
+3. **Rate Limit Exceeded**:
+   - Check your usage in Groq console
+   - Implement request throttling
+   - Consider upgrading to paid plan
 
 4. **Slow Responses**:
-   - Check DeepSeek API response times
+   - Check network latency to Groq
    - Consider reducing context length
+   - Try a smaller model (llama3-8b vs llama3-70b)
 
 ### Debug Mode
 
@@ -249,13 +285,24 @@ Check system health:
 curl http://localhost:8000/api/health
 ```
 
+## Groq vs Other Providers
+
+| Feature | Groq | OpenAI | Anthropic |
+|---------|------|--------|-----------|
+| Speed | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐ |
+| Cost | ⭐⭐⭐⭐⭐ | ⭐⭐ | ⭐⭐ |
+| Free Tier | ⭐⭐⭐⭐⭐ | ⭐⭐ | ⭐ |
+| Model Variety | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ |
+| Open Source | ⭐⭐⭐⭐⭐ | ⭐ | ⭐ |
+
 ## Support
 
 For issues and questions:
 1. Check the logs for error messages
-2. Verify your DeepSeek API configuration
-3. Test the connection using `setup_deepseek.py`
-4. Refer to DeepSeek's API documentation
+2. Verify your Groq API configuration
+3. Test the connection using `setup_groq.py`
+4. Refer to [Groq's documentation](https://console.groq.com/docs)
+5. Check [Groq's status page](https://status.groq.com/)
 
 ## License
 
