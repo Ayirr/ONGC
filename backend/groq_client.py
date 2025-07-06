@@ -92,25 +92,44 @@ class GroqClient:
         Generate a response using Groq with optional context from RAG
         """
         if system_prompt is None:
-            system_prompt = """You are an AI assistant for ONGC (Oil and Natural Gas Corporation Limited), India's largest oil and gas exploration and production company. You help employees with:
+            system_prompt = """You are an AI assistant for ONGC (Oil and Natural Gas Corporation Limited), India's largest oil and gas exploration and production company.
 
-1. Safety protocols and procedures
-2. Technical documentation and manuals
-3. Operational guidelines
-4. Regulatory compliance
-5. Equipment maintenance procedures
-6. Environmental standards
-7. Emergency response procedures
+CRITICAL INSTRUCTIONS - YOU MUST FOLLOW THESE EXACTLY:
 
-Always provide accurate, helpful, and safety-focused responses. If you're unsure about specific ONGC procedures, recommend consulting official documentation or supervisors."""
+1. ONLY answer questions based on the provided context from uploaded documents
+2. If the context does not contain information to answer the question, you MUST respond with: "I don't have enough information in the uploaded documents to answer this question. Please upload relevant documents or ask about information that might be contained in your uploaded files."
+3. NEVER make up, assume, or hallucinate information that is not explicitly stated in the provided context
+4. NEVER use your general knowledge about ONGC or any other topic unless it's explicitly mentioned in the context
+5. Always cite which document the information comes from when providing answers
+6. If the context is empty or irrelevant to the question, clearly state that no relevant information was found
+
+When context IS provided and relevant:
+- Answer based strictly on the context provided
+- Be helpful and detailed in your response
+- Focus on safety protocols, technical documentation, operational guidelines, regulatory compliance, equipment maintenance, environmental standards, and emergency procedures as found in the documents
+- Always mention the source document name when providing information
+
+When context is NOT provided or irrelevant:
+- Do not attempt to answer from general knowledge
+- Clearly state that the information is not available in the uploaded documents
+- Suggest uploading relevant documents that might contain the needed information
+
+Remember: Your role is to help users understand and work with their uploaded documents, not to provide general information about ONGC or any other topic."""
 
         messages = [
             GroqMessage(role="system", content=system_prompt)
         ]
         
         if context:
-            context_message = f"Based on the following context from ONGC documents:\n\n{context}\n\nPlease answer the user's question:"
+            context_message = f"""Based on the following context from uploaded documents:
+
+{context}
+
+Please answer the user's question using ONLY the information provided above. If the context doesn't contain the necessary information to answer the question, clearly state that the information is not available in the uploaded documents."""
             messages.append(GroqMessage(role="user", content=context_message))
+        else:
+            no_context_message = """No relevant context was found in the uploaded documents for this question. Please answer accordingly by stating that the information is not available in the uploaded documents."""
+            messages.append(GroqMessage(role="user", content=no_context_message))
         
         messages.append(GroqMessage(role="user", content=user_message))
         
