@@ -11,20 +11,27 @@ class GroqMessage(BaseModel):
     role: str
     content: str
 
+<<<<<<< HEAD
 class Usage(BaseModel):
     queue_time: float
     prompt_time: float
     completion_time: float
     total_time: float
 
+=======
+>>>>>>> e80c37029b190480dfa7ec366423320ad54ab295
 class GroqResponse(BaseModel):
     id: str
     object: str
     created: int
     model: str
     choices: List[Dict[str, Any]]
+<<<<<<< HEAD
     usage: Usage
 
+=======
+    usage: Dict[str, int]
+>>>>>>> e80c37029b190480dfa7ec366423320ad54ab295
 
 class GroqClient:
     def __init__(self):
