@@ -9,5 +9,5 @@ cp .env.example .env
 python setup_groq.py
 python init_admin.py
 
-username=test1
-password=test123
+username=admin
+password=admin123
